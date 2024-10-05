@@ -255,6 +255,7 @@ public class MultiCastClient {
                 JOptionPane.showMessageDialog(null, "Không tìm thấy giao diện mạng phù hợp cho multicast.");
                 return;
             }
+            System.out.println(groupAddress + " "+ groupPort);
 
             multicastSocket.setNetworkInterface(networkInterface);
 
@@ -384,6 +385,7 @@ public class MultiCastClient {
                     multicastSocket.receive(packet);
                     String message = new String(packet.getData(), 0, packet.getLength());
                     InetAddress senderAddress = packet.getAddress();
+                    System.out.println(message);
                     String displayMessage;
                     if (message.startsWith("[SYSTEM]:")) {
                         // System message, do not include IP
