@@ -28,7 +28,6 @@ public class MultiCastClient {
     private MulticastSocket multicastSocket;
     private InetAddress groupAddress;
     private int groupPort;
-    private NetworkInterface networkInterface;
 
     private JTextArea chatArea;
     private JTextField messageField;
@@ -38,6 +37,8 @@ public class MultiCastClient {
     private final Object roomListLock = new Object();
     private volatile Room createdRoom = null;
     private final Object createRoomLock = new Object();
+
+    public static final byte[] BUFFER = new byte[4096];
 
     public static void main(String[] args) {
         new MultiCastClient().showLoginInterface();
@@ -242,25 +243,11 @@ public class MultiCastClient {
         groupPort = room.getPort();
 
         try {
+            // Create a new Multicast socket
             multicastSocket = new MulticastSocket(groupPort);
-            multicastSocket.setReuseAddress(true);
 
-            // Set TTL
-            multicastSocket.setTimeToLive(10);
-
-            // Choose the correct network interface
-            networkInterface = selectNetworkInterface();
-
-            if (networkInterface == null) {
-                JOptionPane.showMessageDialog(null, "Không tìm thấy giao diện mạng phù hợp cho multicast.");
-                return;
-            }
-            System.out.println(groupAddress + " "+ groupPort);
-
-            multicastSocket.setNetworkInterface(networkInterface);
-
-            // Join multicast group
-            multicastSocket.joinGroup(new InetSocketAddress(groupAddress, groupPort), networkInterface);
+            // Join the Multicast group
+            multicastSocket.joinGroup(groupAddress);
 
             // Notify server that user has joined the room
             out.println("JoinRoom " + currentRoom.getName() + " " + userName);
@@ -271,22 +258,6 @@ public class MultiCastClient {
         } catch (IOException e) {
             e.printStackTrace();
         }
-    }
-
-    private NetworkInterface selectNetworkInterface() throws SocketException {
-        Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
-
-        while (interfaces.hasMoreElements()) {
-            NetworkInterface iface = interfaces.nextElement();
-            // Skip loopback and inactive interfaces
-            if (iface.isLoopback() || !iface.isUp()) continue;
-
-            // Check if the interface supports multicast
-            if (iface.supportsMulticast()) {
-                return iface;
-            }
-        }
-        return null;
     }
 
     private void showChatInterface() {
@@ -366,7 +337,7 @@ public class MultiCastClient {
             // Notify server that user is leaving the room
             out.println("LeaveRoom " + currentRoom.getName() + " " + userName);
 
-            multicastSocket.leaveGroup(new InetSocketAddress(groupAddress, groupPort), networkInterface);
+            multicastSocket.leaveGroup(groupAddress);
             multicastSocket.close();
         } catch (IOException e) {
             e.printStackTrace();
@@ -379,12 +350,11 @@ public class MultiCastClient {
     private class MessageReceiver implements Runnable {
         public void run() {
             try {
-                byte[] buffer = new byte[1024];
                 while (!multicastSocket.isClosed()) {
-                    DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
-                    multicastSocket.receive(packet);
-                    String message = new String(packet.getData(), 0, packet.getLength());
-                    InetAddress senderAddress = packet.getAddress();
+                    DatagramPacket inPacket = new DatagramPacket(BUFFER, BUFFER.length);
+                    multicastSocket.receive(inPacket);
+                    String message = new String(BUFFER, 0, inPacket.getLength());
+                    InetAddress senderAddress = inPacket.getAddress();
                     System.out.println(message);
                     String displayMessage;
                     if (message.startsWith("[SYSTEM]:")) {
