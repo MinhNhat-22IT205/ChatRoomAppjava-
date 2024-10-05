@@ -247,7 +247,8 @@ public class MultiCastClient {
             multicastSocket = new MulticastSocket(groupPort);
 
             // Join the Multicast group
-            multicastSocket.joinGroup(groupAddress);
+            NetworkInterface networkInterface = NetworkInterface.getByInetAddress(InetAddress.getLocalHost());
+            multicastSocket.joinGroup(new InetSocketAddress(groupAddress, groupPort), networkInterface);
 
             // Notify server that user has joined the room
             out.println("JoinRoom " + currentRoom.getName() + " " + userName);
