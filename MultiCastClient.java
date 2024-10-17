@@ -9,6 +9,8 @@ import java.util.List;
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 
+import MultiCastServer.ClientHandler;
+
 public class MultiCastClient {
     private String userName;
     private JFrame loginFrame;
@@ -111,7 +113,7 @@ public class MultiCastClient {
                         String creator = tokens[3];
                         String multicastAddress = tokens[4];
                         int port = Integer.parseInt(tokens[5]);
-                        Room room = new Room(id, name, creator, InetAddress.getByName(multicastAddress), port);
+                        Room room = new Room(id, name);
                         rooms.add(room);
                         SwingUtilities.invokeLater(() -> {
                             roomTableModel.addRow(new Object[]{id, name, creator});
@@ -124,16 +126,13 @@ public class MultiCastClient {
                         }
                     } else if (response.startsWith("Room")) {
                         // This is part of the initial room list
-                        String[] tokens = response.split(" ", 6);
+                        String[] tokens = response.split(" ", 3);
                         int id = Integer.parseInt(tokens[1]);
                         String name = tokens[2];
-                        String creator = tokens[3];
-                        String multicastAddress = tokens[4];
-                        int port = Integer.parseInt(tokens[5]);
-                        Room room = new Room(id, name, creator, InetAddress.getByName(multicastAddress), port);
+                        Room room = new Room(id, name);
                         rooms.add(room);
                         SwingUtilities.invokeLater(() -> {
-                            roomTableModel.addRow(new Object[]{id, name, creator});
+                            roomTableModel.addRow(new Object[]{id, name});
                         });
                     } else if (response.equals("EndOfRoomList")) {
                         // End of initial room list
@@ -156,7 +155,7 @@ public class MultiCastClient {
         roomFrame = new JFrame("Danh sách phòng - " + userName); // Updated title
         roomFrame.setLayout(new BorderLayout());
 
-        roomTableModel = new DefaultTableModel(new Object[]{"ID Phòng", "Tên phòng", "Người tạo"}, 0);
+        roomTableModel = new DefaultTableModel(new Object[]{"ID Phòng", "Tên phòng"}, 0);
         roomTable = new JTable(roomTableModel);
         JScrollPane scrollPane = new JScrollPane(roomTable);
 
@@ -217,7 +216,7 @@ public class MultiCastClient {
     }
 
     private void createRoom(String roomName) {
-        out.println("CreateRoom " + roomName + " " + userName);
+        out.println("CreateRoom " + roomName);
 
         // Wait until room is created and received in serverListenerThread
         synchronized (createRoomLock) {
@@ -239,19 +238,9 @@ public class MultiCastClient {
 
     private void joinRoom(Room room) {
         currentRoom = room;
-        groupAddress = room.getMulticastAddress();
-        groupPort = room.getPort();
 
         try {
-            // Create a new Multicast socket
-            multicastSocket = new MulticastSocket(groupPort);
-
-            // Join the Multicast group
-            NetworkInterface networkInterface = NetworkInterface.getByInetAddress(InetAddress.getLocalHost());
-            multicastSocket.joinGroup(new InetSocketAddress(groupAddress, groupPort), networkInterface);
-
-            // Notify server that user has joined the room
-            out.println("JoinRoom " + currentRoom.getName() + " " + userName);
+            out.println("JoinRoom "+currentRoom.getId()+" " + currentRoom.getName() + " " + userName);
 
             // Notify other clients in the room
             sendSystemMessage("Người dùng " + userName + " đã tham gia phòng.");
@@ -308,26 +297,14 @@ public class MultiCastClient {
         String message = messageField.getText().trim();
         if (!message.isEmpty()) {
             String fullMessage = userName + ": " + message;
-            byte[] buffer = fullMessage.getBytes();
-            DatagramPacket packet = new DatagramPacket(buffer, buffer.length, groupAddress, groupPort);
-            try {
-                multicastSocket.send(packet);
-                messageField.setText("");
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            //TODO: ADD LISTENER
         }
     }
 
     private void sendSystemMessage(String message) {
+    	//TODO: ADD SEND LISTENER
         String fullMessage = "[SYSTEM]: " + message;
-        byte[] buffer = fullMessage.getBytes();
-        DatagramPacket packet = new DatagramPacket(buffer, buffer.length, groupAddress, groupPort);
-        try {
-            multicastSocket.send(packet);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+       
     }
 
     private void leaveRoom() {
@@ -378,23 +355,16 @@ public class MultiCastClient {
     private static class Room {
         private int id;
         private String name;
-        private String creator;
-        private InetAddress multicastAddress;
-        private int port;
 
-        public Room(int id, String name, String creator, InetAddress multicastAddress, int port) {
+        public Room(int id, String name) {
             this.id = id;
             this.name = name;
-            this.creator = creator;
-            this.multicastAddress = multicastAddress;
-            this.port = port;
         }
 
         // Getter methods
         public int getId() { return id; }
         public String getName() { return name; }
-        public String getCreator() { return creator; }
-        public InetAddress getMulticastAddress() { return multicastAddress; }
-        public int getPort() { return port; }
+
+       
     }
 }

@@ -6,9 +6,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 public class MultiCastServer {
     private static List<Room> rooms = new ArrayList<>();
-    private static int roomIdCounter = 1;
-    private static int multicastAddressCounter = 1;
-    private static final String BASE_MULTICAST_ADDRESS = "230.0.0.";
+    private static int roomIdCounter=0;
 
     // List to keep track of all connected clients
     private static List<ClientHandler> clientHandlers = new CopyOnWriteArrayList<>();
@@ -52,17 +50,20 @@ public class MultiCastServer {
                     if (request.startsWith("GetRooms")) {
                         sendRoomList();
                     } else if (request.startsWith("CreateRoom")) {
-                        String[] tokens = request.split(" ", 3);
-                        if (tokens.length == 3) {
+                        String[] tokens = request.split(" ", 2);
+                        if (tokens.length == 2) {
                             String roomName = tokens[1];
-                            String creatorName = tokens[2];
-                            createRoom(roomName, creatorName);
+                            createRoom(roomName);
                         }
                     } else if (request.startsWith("JoinRoom")) {
-                        String[] tokens = request.split(" ", 3);
-                        if (tokens.length == 3) {
-                            String roomName = tokens[1];
-                            String userName = tokens[2];
+                        String[] tokens = request.split(" ", 4);
+                        if (tokens.length == 4) {
+                        	String roomId=tokens[1];
+                            String roomName = tokens[2];
+                            String userName = tokens[3];
+                            int intergerRoomId = Integer.valueOf(roomId);
+                            Room room = getRoomById(intergerRoomId);
+                            room.add
                             System.out.println(getCurrentTimeStamp() + " - User '" + userName + "' joined room '" + roomName + "'");
                         }
                     } else if (request.startsWith("LeaveRoom")) {
@@ -91,23 +92,18 @@ public class MultiCastServer {
         private void sendRoomList() {
         	System.out.println(getCurrentTimeStamp() + "User request to send room list ");
             for (Room room : rooms) {
-                out.println("Room " + room.getId() + " " + room.getName() + " " + room.getCreator()
-                        + " " + room.getMulticastAddress().getHostAddress() + " " + room.getPort());
+                out.println("Room " + room.getId() + " " + room.getName() + " " + room.getCreator());
             }
             out.println("EndOfRoomList");
             System.out.println(getCurrentTimeStamp() + " Room list sent");
         }
 
-        private void createRoom(String roomName, String creatorName) {
+        private void createRoom(String roomName) {
             try {
-                String multicastAddress = BASE_MULTICAST_ADDRESS + multicastAddressCounter++;
-                InetAddress group = InetAddress.getByName(multicastAddress);
-                int port = 5000 + roomIdCounter;
-                Room room = new Room(roomIdCounter++, roomName, creatorName, group, port);
+                
+                Room room = new Room(roomIdCounter++, roomName,this);
                 rooms.add(room);
-                out.println("RoomCreated " + room.getId() + " " + room.getName() + " "
-                        + room.getCreator() + " " + room.getMulticastAddress().getHostAddress()
-                        + " " + room.getPort());
+                out.println("RoomCreated " + room.getId() + " " + room.getName());
 
                 // Log the room creation with timestamp
                 System.out.println(getCurrentTimeStamp() + " - User '" + creatorName + "' created room '" + roomName + "'");
@@ -122,9 +118,7 @@ public class MultiCastServer {
         }
 
         private void broadcastNewRoom(Room room) {
-            String message = "NewRoom " + room.getId() + " " + room.getName() + " "
-                    + room.getCreator() + " " + room.getMulticastAddress().getHostAddress()
-                    + " " + room.getPort();
+            String message = "NewRoom " + room.getId() + " " + room.getName();
             for (ClientHandler clientHandler : clientHandlers) {
                 if (clientHandler != this) { // Avoid sending to the creator again
                     clientHandler.out.println(message);
@@ -137,28 +131,56 @@ public class MultiCastServer {
     private static String getCurrentTimeStamp() {
         return new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date());
     }
+    
+    private static Room getRoomById (int id) {
+    	Room resultRoom=null;
+    	for (Room room : rooms) {
+            if(room.getId()==id) {
+            	resultRoom=room;
+            }
+        }
+    	return resultRoom;
+    }
 
     // Room class
     private static class Room {
         private int id;
         private String name;
-        private String creator;
-        private InetAddress multicastAddress;
-        private int port;
+        private ClientHandler creator;
+        private ArrayList<ClientHandler> members;
 
-        public Room(int id, String name, String creator, InetAddress multicastAddress, int port) {
+        public Room(int id, String name, ClientHandler creator) {
             this.id = id;
             this.name = name;
             this.creator = creator;
-            this.multicastAddress = multicastAddress;
-            this.port = port;
+            this.members = new ArrayList<>();
+            this.members.add(creator);
         }
 
         // Getter methods
         public int getId() { return id; }
         public String getName() { return name; }
-        public String getCreator() { return creator; }
-        public InetAddress getMulticastAddress() { return multicastAddress; }
-        public int getPort() { return port; }
+        public ClientHandler getCreator() { return creator; }
+
+        public void addMember(ClientHandler member) {
+            if (!members.contains(member)) {
+                members.add(member);
+            }
+        }
+
+        public void removeMember(ClientHandler member) {
+            members.remove(member);
+        }
+
+        public void sendMessageToMembers(String message) {
+            for (ClientHandler member : members) {
+                member.out.println(message);
+            }
+        }
+
+        public void broadcastMessage(String senderName, String message) {
+            String fullMessage = senderName + ": " + message;
+            sendMessageToMembers(fullMessage);
+        }
     }
 }
